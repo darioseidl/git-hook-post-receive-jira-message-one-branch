@@ -1,0 +1,195 @@
+#!/bin/bash
+#
+# post-receive hook
+#
+# Add comments in the Jira tickets using Jira API.
+# When the git push is received, every commit adds a comment depending on the Jira tickets found in the commit message.
+
+# This script sends comments only for commits pushed on the branch whose name is $branchName.
+# If several jira tickets are found in the git commit message, the same comment is send to every Jira tickets
+# The Jira comment contains :
+# - SHA1 commit
+# - Commit author
+# - Commit date
+# - Commit message
+# - A link to your git service website of the commit if gitServiceRootUrl is not tempty
+#
+# This file must be named post-receive, and be saved in the hook directory in a bare git repository.
+# Run "chmod +x post-receive" to make it executable.
+#
+# Don't forget to change
+# - Branch name to filter (this is mandatory)
+# - Jira server urls
+# - Jira id regex
+# - Jira role name to filter the visibility of the comments in Jira
+# - Jira login
+# - Jira password
+# - git service url
+#
+# Don't forget to install jshon
+# In order to parse jira message and to use this message in a curl command : you have to install jshon
+# https://github.com/keenerd/jshon
+
+###########################################################################
+# Parameters
+###########################################################################
+
+branchName="refs/heads/develop"
+
+jiraBeginUrl="http://test.jira.com/rest/api/2/issue"
+jiraEndUrl="comment"
+
+jiraIdRegex="[a-zA-Z]{3}-[0-9]{1,6}"
+jiraRoleName="the jira role name"
+
+# Jira credentials
+jiraLogin="login"
+jiraPassword="password"
+
+# Your Git service url like github, gogs, ...
+# Don't forget to put "/" at the end of this url
+gitServiceRootUrl="http://test.git.com/commit/"
+
+###########################################################################
+# Functions
+###########################################################################
+
+# Update the $revisions var with the revisions to process
+# param 1 : old revision hash
+# param 2 : new revision hash
+getRevisionsToProcess() {
+    old=$1
+    new=$2
+
+    # --- Interpret
+    # 0000->1234 (create)
+    # 1234->2345 (update)
+    # 2345->0000 (delete)
+    if expr "$old" : '0*$' > /dev/null
+    then
+      # Show all revisions exclusive to this new branch
+      echo >&2 "You have been working on a new branch"
+      echo "--------------------------------------------------------"
+      revisions=$new
+    else
+        if expr "$new" : '0*$' > /dev/null
+        then
+            echo >&2 "This branch has been deleted,"
+            echo >&2 "no need to post a Jira comment"
+            echo "--------------------------------------------------------"
+      	    revisions=""
+        else
+            # Branch update, show revisions not part of $old
+            echo >&2 "The branch has been updated"
+            echo "--------------------------------------------------------"
+            revisions=$old..$new
+        fi
+    fi
+}
+
+# Build a Jira comment for a git commit
+# Update $jiraComment and $jiraIds var with a formatted comment
+# param 1 : commit revision
+buildComment() {
+    sha1Commit=$1
+    echo
+    echo "sha1 : $sha1Commit"
+
+    # Get the commit information
+    commitAuthorName=$(git show -s --format=%an $sha1Commit)
+    commitAuthorEmail=$(git show -s --format=%ae $sha1Commit)
+    commitDate=$(git show -s --format=%ci $sha1Commit)
+    # The commit message is the text after the first blank line
+    commitMessage=$(git cat-file commit $sha1Commit | sed '1,/^$/d')
+
+    # Jira comment build
+    jiraComment="git branch name : $refname
+    Commit : $sha1Commit
+    Author : $commitAuthorName - $commitAuthorEmail
+    Date : $commitDate
+    
+    Message : $commitMessage"
+    if [ ! -z "$gitServiceRootUrl" ];
+    then
+    jiraComment="$jiraComment
+    
+    $gitServiceRootUrl$sha1Commit"
+    fi
+
+    # Get the Jira ids
+    jiraIds=$(echo $commitMessage | grep -Po $jiraIdRegex)
+}
+
+# Send the comment to Jira
+# param 1 : Jira ticket id
+# param 2 : the formatted comment to send
+sendCommentToJira() {
+    id=$1
+    newJiraComment=$2
+
+    # All the curl errors will be ignored (/dev/null)
+    if [ -z "$jiraRoleName" ];
+    then
+      newJiraComment=$(jshon -s "$newJiraComment") > /dev/null 2>&1
+      content="{\"body\":"$newJiraComment"}"
+      #echo "content : $content"
+      curl -D- -u $jiraLogin:$jiraPassword -X POST -d "$content" -H "Content-Type: application/json" $jiraBeginUrl/$id/$jiraEndUrl > /dev/null 2>&1
+    else
+      # Jira role visibility filter
+      newJiraComment=$(jshon -s "$newJiraComment") > /dev/null 2>&1
+      content="{\"body\":"$newJiraComment", \"visibility\": { \"type\": \"role\", \"value\": \"$jiraRoleName\" }}"
+      #echo "content : $content"
+      curl -D- -u $jiraLogin:$jiraPassword -X POST -d "$content" -H "Content-Type: application/json" $jiraBeginUrl/$id/$jiraEndUrl > /dev/null 2>&1
+    fi
+    echo "New Jira comment added"
+}
+
+###########################################################################
+# Main body of script
+###########################################################################
+echo
+echo "========================================================"
+echo "post-receive git hook"
+echo "========================================================"
+# Branches loop
+# because it is possible to push more than one branch at a time with the "git push --all" command
+while read oldrev newrev refname
+do
+    if [ "$refname" == "$branchName" ]; then
+        echo
+        echo "--------------------------------------------------------"
+        echo "Processing branch : $refname"
+
+        getRevisionsToProcess "$oldrev" "$newrev"
+        
+        # Commits (revisions) loop in chronological order
+        for sha1Commit in $(git rev-parse | \
+            git rev-list --reverse --stdin $revisions)
+        do
+            buildComment "$sha1Commit"
+            
+            # Jira tickets loop
+            for jiraId in ${jiraIds[@]}
+            do
+                echo "Processing Jira : $jiraId"
+                # Uncomment to debug
+                #echo "debug begin comment :"
+                #echo
+                #echo $jiraComment
+                #echo "jiraId : $jiraId"
+                #echo
+                #echo "debug end"
+                
+                sendCommentToJira "$jiraId" "$jiraComment"
+            done            
+        done
+    fi
+done
+
+echo
+echo
+echo "post-receive git hook : see you soon"
+echo "--------------------------------------------------------"
+echo
+
+exit 0
