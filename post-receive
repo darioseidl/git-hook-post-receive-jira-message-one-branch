@@ -110,11 +110,18 @@ buildComment() {
     commitMessage=$(git cat-file commit $sha1Commit | sed '1,/^$/d')
 
     # Jira comment build
-    jiraComment="git branch name : "$refname"\nCommit : "$sha1Commit"\nAuthor : "$commitAuthorName" - "$commitAuthorEmail"\nDate : "$commitDate"\n\nMessage : "$commitMessage
-    
+    jiraComment="git branch name : $refname
+Commit : $sha1Commit
+Author : $commitAuthorName - $commitAuthorEmail
+Date : $commitDate
+
+Message : $commitMessage"
+
     if [ ! -z "$gitServiceRootUrl" ];
     then
-    jiraComment=$jiraComment"\n\n"$gitServiceRootUrl$sha1Commit
+    jiraComment="$jiraComment
+
+$gitServiceRootUrl$sha1Commit"
     fi
 
     # Get the Jira ids
