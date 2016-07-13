@@ -1,7 +1,10 @@
 #post-receive hook
 
+post-receive hook
+
 Add comments in the Jira tickets using Jira API.
 When the git push is received, every commit adds a comment depending on the Jira tickets found in the commit message.
+The script posts a message to Slack in a specific channel too.
 
 This script sends comments only for commits pushed on the branch whose name is $branchName.
 If several jira tickets are found in the git commit message, the same comment is send to every Jira tickets
@@ -23,6 +26,7 @@ Don't forget to change
 - Jira login
 - Jira password
 - git service url
+- Slack config, and import a git icone into Slack
 
 Don't forget to install jshon
 In order to parse jira message and to use this message in a curl command : you have to install jshon
