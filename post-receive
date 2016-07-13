@@ -4,6 +4,7 @@
 #
 # Add comments in the Jira tickets using Jira API.
 # When the git push is received, every commit adds a comment depending on the Jira tickets found in the commit message.
+# The script posts a message to Slack in a specific channel too.
 
 # This script sends comments only for commits pushed on the branch whose name is $branchName.
 # If several jira tickets are found in the git commit message, the same comment is send to every Jira tickets
@@ -25,7 +26,8 @@
 # - Jira login
 # - Jira password
 # - git service url
-#
+# - Slack config, and import a git icone into Slack
+
 # Don't forget to install jshon
 # In order to parse jira message and to use this message in a curl command : you have to install jshon
 # https://github.com/keenerd/jshon
@@ -33,15 +35,14 @@
 ###########################################################################
 # Parameters
 ###########################################################################
-
 branchName="refs/heads/develop"
 
+# Jira
 jiraBeginUrl="http://test.jira.com/rest/api/2/issue"
 jiraEndUrl="comment"
-
+jiraIssueUrl="http://test.jira.com/browse/"
 jiraIdRegex="[a-zA-Z]{3}-[0-9]{1,6}"
 jiraRoleName="the jira role name"
-
 # Jira credentials
 jiraLogin="login"
 jiraPassword="password"
@@ -49,6 +50,12 @@ jiraPassword="password"
 # Your Git service url like github, gogs, ...
 # Don't forget to put "/" at the end of this url
 gitServiceRootUrl="http://test.git.com/commit/"
+
+# Slack
+slackUrl="https://hooks.slack.com/services/TXXXXXXX/BXXXXXXX/dBXXXXXXXXXXXXXXXXXX"
+slackChannel="#git"
+gitIconName="git"
+slackBotName="githookbot"
 
 ###########################################################################
 # Functions
@@ -103,17 +110,11 @@ buildComment() {
     commitMessage=$(git cat-file commit $sha1Commit | sed '1,/^$/d')
 
     # Jira comment build
-    jiraComment="git branch name : $refname
-    Commit : $sha1Commit
-    Author : $commitAuthorName - $commitAuthorEmail
-    Date : $commitDate
+    jiraComment="git branch name : "$refname"\nCommit : "$sha1Commit"\nAuthor : "$commitAuthorName" - "$commitAuthorEmail"\nDate : "$commitDate"\n\nMessage : "$commitMessage
     
-    Message : $commitMessage"
     if [ ! -z "$gitServiceRootUrl" ];
     then
-    jiraComment="$jiraComment
-    
-    $gitServiceRootUrl$sha1Commit"
+    jiraComment=$jiraComment"\n\n"$gitServiceRootUrl$sha1Commit
     fi
 
     # Get the Jira ids
@@ -127,7 +128,6 @@ sendCommentToJira() {
     id=$1
     newJiraComment=$2
 
-    # All the curl errors will be ignored (/dev/null)
     if [ -z "$jiraRoleName" ];
     then
       newJiraComment=$(jshon -s "$newJiraComment") > /dev/null 2>&1
@@ -141,7 +141,22 @@ sendCommentToJira() {
       #echo "content : $content"
       curl -D- -u $jiraLogin:$jiraPassword -X POST -d "$content" -H "Content-Type: application/json" $jiraBeginUrl/$id/$jiraEndUrl > /dev/null 2>&1
     fi
-    echo "New Jira comment added"
+    echo "New Jira comment posted"
+}
+
+# Send the comment to Slack
+# param 1 : Jira ticket id
+# param 2 : the formatted comment send to Jira
+sendCommentToSlack() {
+    id=$1
+    slackComment=$2
+    
+    # >>> starts a new paragraph
+    slackComment=">>>"$slackComment"\n"$jiraIssueUrl$id
+    payload='payload={"channel": "'"$slackChannel"'", "username": "'"$slackBotName"'", "text": "'"$slackComment"'", "icon_emoji": ":'"$gitIconName"':"}'
+    #echo $payload
+    curl -X POST --data-urlencode "$payload" "$slackUrl" > /dev/null 2>&1
+    echo "New slack comment posted to "$slackChannel" channel"   
 }
 
 ###########################################################################
@@ -180,7 +195,14 @@ do
                 #echo
                 #echo "debug end"
                 
-                sendCommentToJira "$jiraId" "$jiraComment"
+                if [ -n "$jiraBeginUrl" ];
+                then
+                    sendCommentToJira "$jiraId" "$jiraComment"
+                fi
+                if [ -n "$slackUrl" ];
+                then
+		            sendCommentToSlack "$jiraId" "$jiraComment"
+		        fi
             done            
         done
     fi
