@@ -4,7 +4,6 @@
 #
 # Add comments in the Jira tickets using Jira API.
 # When the git push is received, every commit adds a comment depending on the Jira tickets found in the commit message.
-# The script posts a message to Slack in a specific channel too.
 
 # This script sends comments only for commits pushed on the branch whose name is $branchName.
 # If several jira tickets are found in the git commit message, the same comment is send to every Jira tickets
@@ -13,7 +12,7 @@
 # - Commit author
 # - Commit date
 # - Commit message
-# - A link to your git service website of the commit if gitServiceRootUrl is not tempty
+# - A link to your git service website of the commit if gitServiceRootUrl is not empty
 #
 # This file must be named post-receive, and be saved in the hook directory in a bare git repository.
 # Run "chmod +x post-receive" to make it executable.
@@ -26,7 +25,6 @@
 # - Jira login
 # - Jira password
 # - git service url
-# - Slack config, and import a git icone into Slack
 
 # Don't forget to install jshon
 # In order to parse jira message and to use this message in a curl command : you have to install jshon
@@ -35,27 +33,25 @@
 ###########################################################################
 # Parameters
 ###########################################################################
+
 branchName="refs/heads/develop"
 
-# Jira
-jiraBeginUrl="http://test.jira.com/rest/api/2/issue"
+jiraBaseUrl=
+jiraLogin=
+jiraPassword=
+
+jiraBeginUrl="${jiraBaseUrl}/rest/api/2/issue"
 jiraEndUrl="comment"
-jiraIssueUrl="http://test.jira.com/browse/"
+jiraIssueUrl="${jiraBaseUrl}/browse/"
 jiraIdRegex="[a-zA-Z]{3}-[0-9]{1,6}"
-jiraRoleName="the jira role name"
-# Jira credentials
-jiraLogin="login"
-jiraPassword="password"
+# Jira role, can be left empty
+jiraRoleName=
 
 # Your Git service url like github, gogs, ...
 # Don't forget to put "/" at the end of this url
-gitServiceRootUrl="http://test.git.com/commit/"
-
-# Slack
-slackUrl="https://hooks.slack.com/services/TXXXXXXX/BXXXXXXX/dBXXXXXXXXXXXXXXXXXX"
-slackChannel="#git"
-gitIconName="git"
-slackBotName="githookbot"
+# For gogs use
+# gitServiceRootUrl="https://gogs.base.url/${GOGS_REPO_OWNER_NAME}/${GOGS_REPO_NAME}/commit/"
+gitServiceRootUrl=
 
 ###########################################################################
 # Functions
@@ -151,21 +147,6 @@ sendCommentToJira() {
     echo "New Jira comment posted"
 }
 
-# Send the comment to Slack
-# param 1 : Jira ticket id
-# param 2 : the formatted comment send to Jira
-sendCommentToSlack() {
-    id=$1
-    slackComment=$2
-    
-    # >>> starts a new paragraph
-    slackComment=">>>"$slackComment"\n"$jiraIssueUrl$id
-    payload='payload={"channel": "'"$slackChannel"'", "username": "'"$slackBotName"'", "text": "'"$slackComment"'", "icon_emoji": ":'"$gitIconName"':"}'
-    #echo $payload
-    curl -X POST --data-urlencode "$payload" "$slackUrl" > /dev/null 2>&1
-    echo "New slack comment posted to "$slackChannel" channel"   
-}
-
 ###########################################################################
 # Main body of script
 ###########################################################################
@@ -206,10 +187,6 @@ do
                 then
                     sendCommentToJira "$jiraId" "$jiraComment"
                 fi
-                if [ -n "$slackUrl" ];
-                then
-		            sendCommentToSlack "$jiraId" "$jiraComment"
-		        fi
             done            
         done
     fi
