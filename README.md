@@ -1,6 +1,4 @@
-#post-receive hook
-
-post-receive hook
+### post-receive hook
 
 Add comments in the Jira tickets using Jira API.
 When the git push is received, every commit adds a comment depending on the Jira tickets found in the commit message.
@@ -13,7 +11,7 @@ The Jira comment contains :
 - Commit author
 - Commit date
 - Commit message
-- A link to your git service website of the commit if gitServiceRootUrl is not tempty
+- A link to your git service website of the commit if gitServiceRootUrl is not empty
 
 This file must be named post-receive, and be saved in the hook directory in a bare git repository.
 Run "chmod +x post-receive" to make it executable.
@@ -26,8 +24,10 @@ Don't forget to change
 - Jira login
 - Jira password
 - git service url
-- Slack config, and import a git icone into Slack
 
 Don't forget to install jshon
 In order to parse jira message and to use this message in a curl command : you have to install jshon
 https://github.com/keenerd/jshon
+
+- Forked from https://github.com/FabreFrederic/git-hook-post-receive-jira-message-one-branch
+- Removed Slack integration
