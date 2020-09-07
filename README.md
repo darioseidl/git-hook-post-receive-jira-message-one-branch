@@ -32,23 +32,20 @@ https://github.com/keenerd/jshon
 - Forked from https://github.com/FabreFrederic/git-hook-post-receive-jira-message-one-branch
 - Removed Slack integration
 
-## Debug
+#### Debug
 
 To debug / test posting a comment to jira, use:
 
-# Jira
-jiraUrl="https://example.atlassian.net/"
-jiraBeginUrl="${jiraUrl}rest/api/2/issue"
-jiraEndUrl="comment"
-jiraIssueUrl="${jiraUrl}browse/"
-jiraIdRegex="[a-zA-Z]{3}-[0-9]{1,6}"
-jiraRoleName=
+    jiraUrl="https://example.atlassian.net/"
+    jiraBeginUrl="${jiraUrl}rest/api/2/issue"
+    jiraEndUrl="comment"
+    jiraIssueUrl="${jiraUrl}browse/"
+    jiraIdRegex="[a-zA-Z]{3}-[0-9]{1,6}"
+    jiraRoleName=
+    jiraLogin="example@example.com"
+    jiraPassword="example"
 
-# Jira credentials
-jiraLogin="example@example.com"
-jiraPassword="example"
+    content="{\"body\": \"Test.\"}"
+    id="EXP-123"
 
-content="{\"body\": \"Test.\"}"
-id="EXP-123"
-
-curl -D- --silent --show-error --user "$jiraLogin":"$jiraPassword" -X POST --data "$content" -H "Content-Type: application/json" "$jiraBeginUrl/$id/$jiraEndUrl"
+    curl -D- --silent --show-error --user "$jiraLogin":"$jiraPassword" -X POST --data "$content" -H "Content-Type: application/json" "$jiraBeginUrl/$id/$jiraEndUrl"
